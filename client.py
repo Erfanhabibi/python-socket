@@ -9,17 +9,26 @@ server_address = ('localhost', 10001)
 sock.connect(server_address)
 
 try:
-    # Open the image file in binary read mode
-    with open('path_to_image.jpg', 'rb') as image_file:
-        # Read the image data
-        image_data = image_file.read()
+    #ask the user for the confermation to send the image
+    print("Do you want to send the image?")
+    print("1. Yes")
+    print("2. No")
+    choice = input("Enter your choice: ")
+    if choice == '1':
+        print("Sending the image")
+        # Open the image file in binary read mode
+        with open('path_to_image.jpg', 'rb') as image_file:
+            # Read the image data
+            image_data = image_file.read()
 
-        # Send the image data to the server
-        sock.sendall(image_data)
+            # Send the image data to the server
+            sock.sendall(image_data)
+            # Receive the thank you message from the server
+            thank_you_message = sock.recv(1024)
+            print(thank_you_message.decode('UTF-8'))
+    else:
+        print("Exiting")
 
-    # Receive the thank you message from the server
-    thank_you_message = sock.recv(1024)
-    print(thank_you_message.decode('UTF-8'))
 finally:
     # Close the socket
     sock.close()
