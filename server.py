@@ -1,40 +1,33 @@
+# Server code to receive an image and send a thank you message
 import socket
-import sys
 
 # Create the socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Bind the socket to the localhost:10001
 server_address = ('localhost', 10001)
-sock.bind(server_address)
-print('starting up on %s port %s' % server_address)
+server_sock.bind(server_address)
 
-# Listen
-sock.listen(1)
+# Listen for incoming connections
+server_sock.listen(1)
 
-while True:
-    # Wait for an incomming connection
-    print('waiting...', file=sys.stderr)
-    connection, client_addr = sock.accept()
+try:
+    # Wait for a connection
+    print('waiting for a connection')
+    connection, client_address = server_sock.accept()
+    print('connection from', client_address)
 
-    try:
-        print('A request came! IP is ', client_addr)
-
-        # Read data
+    # Receive the data in small chunks and write it to a file
+    with open('received_image.jpg', 'wb') as image_file:
         while True:
-            data = connection.recv(150)  # or any other number
-            print('request is:', data.decode('UTF-8'))
-            if data:
-                try:
-                    answer = str(eval(data))
-                except:
-                    answer = 'error!'
-                connection.sendall(answer.encode('UTF-8'))
-                print('Hooraay.... Answered this one.')
-            else:
-                print('No data recived from', client_addr)
+            data = connection.recv(1024)
+            if not data:
                 break
+            image_file.write(data)
 
-    finally:
-        # Clean up the connection
-        connection.close()
+    # Send a thank you message to the client
+    thank_you_message = 'Thank you for the image!'
+    connection.sendall(thank_you_message.encode('UTF-8'))
+finally:
+    # Clean up the connection
+    connection.close()

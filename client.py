@@ -1,27 +1,25 @@
+# Client code to send an image and receive a thank you message
 import socket
-import sys
 
 # Create the socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# Bind the socket to the localhost:10001
+# Connect to the server
 server_address = ('localhost', 10001)
-print('connecting to %s:%s' % server_address)
 sock.connect(server_address)
 
-message = ''
-
 try:
-    while message != 'done':
-        # read the request
-        message = input('\nWhat is your math question? [sample: 4*7+6] ')
-        # send the query
-        sock.sendall(message.encode('UTF-8'))
+    # Open the image file in binary read mode
+    with open('path_to_image.jpg', 'rb') as image_file:
+        # Read the image data
+        image_data = image_file.read()
 
-        # read the answer from the server
-        data = sock.recv(100) #it should not be more than 100 chars
-        print('The answer of %s is %s.' % (message, data.decode('UTF-8')))
+        # Send the image data to the server
+        sock.sendall(image_data)
 
+    # Receive the thank you message from the server
+    thank_you_message = sock.recv(1024)
+    print(thank_you_message.decode('UTF-8'))
 finally:
-    print('closing socket', file=sys.stderr)
+    # Close the socket
     sock.close()
