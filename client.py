@@ -6,6 +6,7 @@ import wave
 import os
 from PIL import Image, ImageTk
 from datetime import datetime
+import io
 
 
 class ClientGUI:
@@ -89,7 +90,7 @@ class ClientGUI:
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 44100
-        RECORD_SECONDS = 30
+        RECORD_SECONDS = 5
         WAVE_OUTPUT_FILENAME = "output.wav"
 
         p = pyaudio.PyAudio()
@@ -151,29 +152,24 @@ class ClientGUI:
             self.root.update()
 
     def process_data(self, data):
-        # Here, you can implement logic to handle received data
-        print("Received data:", data.decode())
-        
-    #recive image and voice from server and save it
-    def recive_data(self, data):
-        # Here, you can implement logic to handle received data
-        print("Received data:", data.decode())
-        # Save the received image to a folder if it doesn't exist
-        folder_path = "received_images_client"
-        # Create folder if it doesn't exist
-        os.makedirs(folder_path, exist_ok=True)
-        image_path = os.path.join(folder_path, "received_image.jpg")
-        cv2.imwrite(image_path, data)
-        self.status_label.config(text=f"Image saved: {image_path}")
-        
-        # Save the received audio to a folder if it doesn't exist
-        folder_path = "received_audio_client"
-        # Create folder if it doesn't exist
-        os.makedirs(folder_path, exist_ok=True)
-        audio_path = os.path.join(folder_path, "received_audio.wav")
-        with open(audio_path, 'wb') as f:
-            f.write(data)
-        self.status_label.config(text=f"Audio saved: {audio_path}")
+        try:
+            # Attempt to open the data as an image
+            image = Image.open(io.BytesIO(data))
+            # If successful, save the image
+            folder_path = "received_images_server"
+            os.makedirs(folder_path, exist_ok=True)
+            image_path = os.path.join(folder_path, "received_image.jpg")
+            image.save(image_path)
+            self.status_label.config(text=f"Image saved: {image_path}")
+        except IOError:
+            # If an error occurs, assume the data is audio and save it
+            folder_path = "received_audio_server"
+            os.makedirs(folder_path, exist_ok=True)
+            audio_path = os.path.join(folder_path, "received_audio.wav")
+            with open(audio_path, 'wb') as f:
+                f.write(data)
+            self.status_label.config(text=f"Audio saved: {audio_path}")
+
 
     def start_webcam(self):
         # Try different backends to open the webcam

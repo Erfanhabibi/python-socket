@@ -5,6 +5,7 @@ import pyaudio
 import wave
 import os
 from PIL import Image, ImageTk
+from datetime import datetime
 
 class ServerGUI:
     def __init__(self, root):
@@ -146,9 +147,24 @@ class ServerGUI:
             client_socket.sendall(data)
             
     def process_data(self, data):
-        # Process the received data here
-        pass
-        
+        try:
+            # Attempt to open the data as an image
+            image = Image.open(io.BytesIO(data))
+            # If successful, save the image
+            folder_path = "received_images_server"
+            os.makedirs(folder_path, exist_ok=True)
+            image_path = os.path.join(folder_path, "received_image.jpg")
+            image.save(image_path)
+            self.status_label.config(text=f"Image saved: {image_path}")
+        except IOError:
+            # If an error occurs, assume the data is audio and save it
+            folder_path = "received_audio_server"
+            os.makedirs(folder_path, exist_ok=True)
+            audio_path = os.path.join(folder_path, "received_audio.wav")
+            with open(audio_path, 'wb') as f:
+                f.write(data)
+            self.status_label.config(text=f"Audio saved: {audio_path}")
+
     def start_webcam(self):
         
         cap = cv2.VideoCapture(0)
