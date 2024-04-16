@@ -1,3 +1,4 @@
+import io
 import tkinter as tk
 import socket
 import cv2
@@ -36,6 +37,7 @@ class ServerGUI:
             self.root, text="Close", command=self.close_app)
         self.close_button.pack()
 
+
     def start_server(self):
         self.status_label.config(text="Server is running...")
         self.root.update()
@@ -63,28 +65,25 @@ class ServerGUI:
                     self.process_data(data)
 
     def capture_image(self):
-
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
         cv2.imshow('Captured Image', frame)
-        cv2.waitKey(2000)  # Wait for 5 seconds
-        cv2.destroyAllWindows()  # Close the OpenCV window
+        cv2.waitKey(2000)  # Wait for 2 seconds
+        cv2.destroyAllWindows()
 
-        # Save the captured image to a folder if it doesn't exist
-        folder_path = "server_images_server"
-        # Create folder if it doesn't exist
+        # Save the captured image to a folder with timestamp
+        folder_path = "captured_images_server"
         os.makedirs(folder_path, exist_ok=True)
-        image_path = os.path.join(folder_path, "server_image.jpg")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = os.path.join(
+            folder_path, f"captured_image_{timestamp}.jpg")
         cv2.imwrite(image_path, frame)
         self.status_label.config(text=f"Image saved: {image_path}")
 
-        # Convert frame to bytes
+        # Convert frame to bytes and send to server
         _, img_bytes = cv2.imencode('.jpg', frame)
-
-        # Send image to the server
         self.send_data(img_bytes)
 
-        # close the capture
         cap.release()
 
     def record_audio(self):
@@ -92,8 +91,8 @@ class ServerGUI:
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 44100
-        RECORD_SECONDS = 30
-        WAVE_OUTPUT_FILENAME = "output.wav"
+        RECORD_SECONDS = 5
+        # WAVE_OUTPUT_FILENAME = "captured_audio_{timestamp}.wav"
 
         p = pyaudio.PyAudio()
 
@@ -116,55 +115,50 @@ class ServerGUI:
         stream.stop_stream()
         stream.close()
         p.terminate()
-
-        with wave.open(WAVE_OUTPUT_FILENAME, 'wb') as wf:
+        # Save the recorded audio to a folder with timestamp
+        folder_path = "captured_audio_server"
+        os.makedirs(folder_path, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        audio_path = os.path.join(
+            folder_path, f"captured_audio_{timestamp}.wav")
+        with wave.open(audio_path, 'wb') as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(p.get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
 
-        # Read recorded audio file as bytes
-        with open(WAVE_OUTPUT_FILENAME, 'rb') as f:
-            audio_data = f.read()
-
-        # save the audio file
-        folder_path = "captured_audio_server"
-        os.makedirs(folder_path, exist_ok=True)
-        audio_path = os.path.join(folder_path, "captured_audio.wav")
-        with open(audio_path, 'wb') as f:
-            f.write(audio_data)
         self.status_label.config(text=f"Audio saved: {audio_path}")
-
-        # Send audio to the server
-        self.send_data(audio_data)
+        self.send_data(audio_path)
         
-    def send_data(self, data):
-        HOST = self.client_ip_entry.get()
-        PORT = int(self.client_port_entry.get())
+               
+    # def send_data(self, data):
+    #     HOST = self.client_ip_entry.get()
+    #     PORT = int(self.client_port_entry.get())
         
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((HOST, PORT))
-            client_socket.sendall(data)
+    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+    #         try:
+    #             client_socket.connect((HOST, PORT))
+    #             client_socket.sendall(data)
+    #             self.status_label.config(text="Data sent to client")
+    #         except Exception as e:
+    #             self.status_label.config(text=f"Error:{e}")
+    #         self.root.update()
             
-    def process_data(self, data):
-        try:
-            # Attempt to open the data as an image
-            image = Image.open(io.BytesIO(data))
-            # If successful, save the image
-            folder_path = "received_images_server"
-            os.makedirs(folder_path, exist_ok=True)
-            image_path = os.path.join(folder_path, "received_image.jpg")
-            image.save(image_path)
-            self.status_label.config(text=f"Image saved: {image_path}")
-        except IOError:
-            # If an error occurs, assume the data is audio and save it
-            folder_path = "received_audio_server"
-            os.makedirs(folder_path, exist_ok=True)
-            audio_path = os.path.join(folder_path, "received_audio.wav")
-            with open(audio_path, 'wb') as f:
-                f.write(data)
-            self.status_label.config(text=f"Audio saved: {audio_path}")
 
+    def receive_picture(self, data):
+        # Receive the picture data and save it
+        folder_path = "received_images_server"
+        os.makedirs(folder_path, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = os.path.join(
+            folder_path, f"received_image_{timestamp}.jpg")
+        with open(image_path, 'wb') as f:
+            f.write(data)
+        self.status_label.config(
+            text=f"Image received and saved: {image_path}")
+
+            
+            
     def start_webcam(self):
         
         cap = cv2.VideoCapture(0)

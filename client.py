@@ -62,6 +62,17 @@ class ClientGUI:
                 self.status_label.config(text=f"Error: {e}")
             self.root.update()
 
+    def send_picture(self, image_bytes, host, port):
+        # Establish a TCP connection
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((host, port))
+
+            # Send the size of the image data
+            s.sendall(len(image_bytes).to_bytes(4, byteorder='big'))
+
+            # Send the image data
+            s.sendall(image_bytes)
+
     def capture_image(self):
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
@@ -78,11 +89,15 @@ class ClientGUI:
         cv2.imwrite(image_path, frame)
         self.status_label.config(text=f"Image saved: {image_path}")
 
-        # Convert frame to bytes and send to server
+        # Convert frame to bytes
         _, img_bytes = cv2.imencode('.jpg', frame)
-        self.send_data(img_bytes)
+        # Send the picture bytes to the server
+        host = self.IP_entry()  # Replace 'server_address' with the actual server address
+        port = int(self.port_entry.get())         # Replace 12345 with the actual port number
+        self.send_picture(img_bytes, host, port)
 
         cap.release()
+     
 
 
     def record_audio(self):
@@ -91,7 +106,7 @@ class ClientGUI:
         CHANNELS = 1
         RATE = 44100
         RECORD_SECONDS = 5
-        WAVE_OUTPUT_FILENAME = "output.wav"
+        # WAVE_OUTPUT_FILENAME = "captured_audio_{timestamp}.wav"
 
         p = pyaudio.PyAudio()
 
@@ -114,29 +129,22 @@ class ClientGUI:
         stream.stop_stream()
         stream.close()
         p.terminate()
-
-        with wave.open(WAVE_OUTPUT_FILENAME, 'wb') as wf:
-            wf.setnchannels(CHANNELS)
-            wf.setsampwidth(p.get_sample_size(FORMAT))
-            wf.setframerate(RATE)
-            wf.writeframes(b''.join(frames))
-
-        # Read recorded audio file as bytes
-        with open(WAVE_OUTPUT_FILENAME, 'rb') as f:
-            audio_data = f.read()
-            
         # Save the recorded audio to a folder with timestamp
         folder_path = "captured_audio_client"
         os.makedirs(folder_path, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         audio_path = os.path.join(
             folder_path, f"captured_audio_{timestamp}.wav")
-        with open(audio_path, 'wb') as f:
-            f.write(audio_data)
-        self.status_label.config(text=f"Audio saved: {audio_path}")
+        with wave.open(audio_path, 'wb') as wf:
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(p.get_sample_size(FORMAT))
+            wf.setframerate(RATE)
+            wf.writeframes(b''.join(frames))
 
-        # Send audio to the server
-        self.send_data(audio_data)
+        self.status_label.config(text=f"Audio saved: {audio_path}")
+        self.send_data(audio_path)
+
+
 
     def send_data(self, data):
         host = self.IP_entry.get()
@@ -158,14 +166,17 @@ class ClientGUI:
             # If successful, save the image
             folder_path = "received_images_server"
             os.makedirs(folder_path, exist_ok=True)
-            image_path = os.path.join(folder_path, "received_image.jpg")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            image_path = os.path.join(
+                folder_path, f"received_image_{timestamp}.jpg")
             image.save(image_path)
             self.status_label.config(text=f"Image saved: {image_path}")
         except IOError:
             # If an error occurs, assume the data is audio and save it
             folder_path = "received_audio_server"
             os.makedirs(folder_path, exist_ok=True)
-            audio_path = os.path.join(folder_path, "received_audio.wav")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            audio_path = os.path.join(folder_path, f"received_audio{timestamp}.wav")
             with open(audio_path, 'wb') as f:
                 f.write(data)
             self.status_label.config(text=f"Audio saved: {audio_path}")
