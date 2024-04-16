@@ -45,9 +45,10 @@ class ClientGUI:
 
         # Start webcam feed
         self.start_webcam()
-        
+
         # Create a button to close the app
-        self.close_button = tk.Button(self.root, text="Close", command=self.close_app)
+        self.close_button = tk.Button(
+            self.root, text="Close", command=self.close_app)
         self.close_button.pack()
 
     def connect_to_server(self):
@@ -74,31 +75,31 @@ class ClientGUI:
             s.sendall(image_bytes)
 
     def capture_image(self):
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
-        cv2.imshow('Captured Image', frame)
-        cv2.waitKey(2000)  # Wait for 2 seconds
-        cv2.destroyAllWindows()
+        if hasattr(self, 'cap'):
+            ret, frame = self.cap.read()
+            if ret:
+                # Convert frame to bytes and send to server
+                _, img_bytes = cv2.imencode('.jpg', frame)
+                # self.send_data(img_bytes)
 
-        # Save the captured image to a folder with timestamp
-        folder_path = "captured_images_client"
-        os.makedirs(folder_path, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        image_path = os.path.join(
-            folder_path, f"captured_image_{timestamp}.jpg")
-        cv2.imwrite(image_path, frame)
-        self.status_label.config(text=f"Image saved: {image_path}")
+                # Save the captured image to a folder with timestamp
+                folder_path = "captured_images_client"
+                os.makedirs(folder_path, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_path = os.path.join(
+                    folder_path, f"captured_image_{timestamp}.jpg")
+                cv2.imwrite(image_path, frame)
+                self.status_label.config(text=f"Image saved: {image_path}")
 
-        # Convert frame to bytes
-        _, img_bytes = cv2.imencode('.jpg', frame)
-        # Send the picture bytes to the server
-        host = self.IP_entry()  # Replace 'server_address' with the actual server address
-        port = int(self.port_entry.get())         # Replace 12345 with the actual port number
-        self.send_picture(img_bytes, host, port)
-
-        cap.release()
-     
-
+                # Display the captured image on the webcam label
+                cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+                img = Image.fromarray(cv2image)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.webcam_label.imgtk = imgtk
+                self.webcam_label.configure(image=imgtk)
+                self.root.update()
+        else:
+            self.status_label.config(text="Webcam not available")
 
     def record_audio(self):
         CHUNK = 1024
@@ -144,8 +145,6 @@ class ClientGUI:
         self.status_label.config(text=f"Audio saved: {audio_path}")
         self.send_data(audio_path)
 
-
-
     def send_data(self, data):
         host = self.IP_entry.get()
         port = int(self.port_entry.get())
@@ -159,50 +158,23 @@ class ClientGUI:
                 self.status_label.config(text=f"Error: {e}")
             self.root.update()
 
-    def process_data(self, data):
-        try:
-            # Attempt to open the data as an image
-            image = Image.open(io.BytesIO(data))
-            # If successful, save the image
-            folder_path = "received_images_server"
-            os.makedirs(folder_path, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            image_path = os.path.join(
-                folder_path, f"received_image_{timestamp}.jpg")
-            image.save(image_path)
-            self.status_label.config(text=f"Image saved: {image_path}")
-        except IOError:
-            # If an error occurs, assume the data is audio and save it
-            folder_path = "received_audio_server"
-            os.makedirs(folder_path, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            audio_path = os.path.join(folder_path, f"received_audio{timestamp}.wav")
-            with open(audio_path, 'wb') as f:
-                f.write(data)
-            self.status_label.config(text=f"Audio saved: {audio_path}")
-
-
     def start_webcam(self):
-        # Try different backends to open the webcam
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            print("Error: Could not open webcam.")
-            return
+        self.cap = cv2.VideoCapture(0)
 
-        def update_frame():
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = ImageTk.PhotoImage(image=Image.fromarray(frame))
-                self.webcam_label.img = img
-                self.webcam_label.config(image=img)
-            self.webcam_label.after(10, update_frame)
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
 
-        update_frame()
-    
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+            img = Image.fromarray(cv2image)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.webcam_label.imgtk = imgtk
+            self.webcam_label.configure(image=imgtk)
+            self.root.update()
+
     def close_app(self):
         self.root.destroy()
-
 
 
 if __name__ == "__main__":
