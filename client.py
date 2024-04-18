@@ -32,11 +32,11 @@ class ClientGUI:
         self.port_entry.pack()
 
         self.capture_button = tk.Button(
-            self.root, text="Capture Image", command=self.capture_image)
+            self.root, text="Capture Image", command=self.capture_image, state=tk.DISABLED)
         self.capture_button.pack()
 
         self.record_button = tk.Button(
-            self.root, text="Record Audio", command=self.record_audio)
+            self.root, text="Record Audio", command=self.record_audio, state=tk.DISABLED)
         self.record_button.pack()
 
         # Create a label to display the webcam feed
@@ -51,37 +51,81 @@ class ClientGUI:
             self.root, text="Close", command=self.close_app)
         self.close_button.pack()
 
+        self.socket = None
+
     def connect_to_server(self):
-        host = self.IP_entry.get()
-        port = int(self.port_entry.get())
+        try:
+            host = self.IP_entry.get()
+            port = int(self.port_entry.get())
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            try:
-                client_socket.connect((host, port))
-                self.status_label.config(text=f"Connected to {host}:{port}")
-            except Exception as e:
-                self.status_label.config(text=f"Error: {e}")
-            self.root.update()
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((host, port))
+            self.status_label.config(text="Connected to server")
 
-    def send_picture(self, image_bytes, host, port):
-        # Establish a TCP connection
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((host, port))
+            # Enable capture image and record audio buttons
+            self.capture_button.config(state=tk.NORMAL)
+            self.record_button.config(state=tk.NORMAL)
+            
+            while True:
+                try:
+                    data = self.socket.recv(1024)  # Adjust buffer size as needed
+                    if not data:
+                        break  # If no data received, break out of the loop
+                    self.process_data(data)
+                except Exception as e:
+                    print(f"Error receiving data from server: {str(e)}")
+                    break  # Break out of the loop on error
 
-            # Send the size of the image data
-            s.sendall(len(image_bytes).to_bytes(4, byteorder='big'))
+        except Exception as e:
+            self.status_label.config(
+                text=f"Error connecting to server: {str(e)}")
 
-            # Send the image data
-            s.sendall(image_bytes)
+    def process_data(self, data):
+        if data.startswith(b'IMG'):
+            img_bytes = data[3:]
+            self.receive_image(img_bytes)
+        elif data.startswith(b'AUDIO'):
+            audio_bytes = data[5:]
+            self.receive_audio(audio_bytes)
+        else:
+            self.status_label.config(text="Invalid data received")
+
+    def receive_image(self, img_bytes):
+        # save the recidved image to a folder with timestamp
+        folder_path = "received_images_client"
+        os.makedirs(folder_path, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = os.path.join(
+            folder_path, f"received_image_{timestamp}.jpg")
+        with open(image_path, 'wb') as img_file:
+            img_file.write(img_bytes)
+        self.status_label.config(text=f"Image saved: {image_path}")
+
+    def receive_audio(self, audio_bytes):
+        # save the recived audio to a folder with timestamp
+        folder_path = "received_audio_client"
+        os.makedirs(folder_path, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        audio_path = os.path.join(
+            folder_path, f"received_audio_{timestamp}.wav")
+        with open(audio_path, 'wb') as audio_file:
+            audio_file.write(audio_bytes)
+        self.status_label.config(text=f"Audio saved: {audio_path}")
+
+    def send_data(self, data):
+        try:
+            if self.socket:
+                self.socket.sendall(data)
+            else:
+                self.status_label.config(text="Not connected to server")
+        except Exception as e:
+            self.status_label.config(
+                text=f"Error sending data to server: {str(e)}")
 
     def capture_image(self):
         if hasattr(self, 'cap'):
             ret, frame = self.cap.read()
             if ret:
-                # Convert frame to bytes and send to server
-                _, img_bytes = cv2.imencode('.jpg', frame)
-                # self.send_data(img_bytes)
-
                 # Save the captured image to a folder with timestamp
                 folder_path = "captured_images_client"
                 os.makedirs(folder_path, exist_ok=True)
@@ -98,6 +142,13 @@ class ClientGUI:
                 self.webcam_label.imgtk = imgtk
                 self.webcam_label.configure(image=imgtk)
                 self.root.update()
+
+                # Convert frame to bytes
+                with open(image_path, 'rb') as img_file:
+                    img_bytes = img_file.read()
+
+                # Send image data to the server
+                self.send_data(b'IMG' + img_bytes)
         else:
             self.status_label.config(text="Webcam not available")
 
@@ -107,8 +158,6 @@ class ClientGUI:
         CHANNELS = 1
         RATE = 44100
         RECORD_SECONDS = 5
-        # WAVE_OUTPUT_FILENAME = "captured_audio_{timestamp}.wav"
-
         p = pyaudio.PyAudio()
 
         stream = p.open(format=FORMAT,
@@ -130,6 +179,7 @@ class ClientGUI:
         stream.stop_stream()
         stream.close()
         p.terminate()
+
         # Save the recorded audio to a folder with timestamp
         folder_path = "captured_audio_client"
         os.makedirs(folder_path, exist_ok=True)
@@ -143,20 +193,13 @@ class ClientGUI:
             wf.writeframes(b''.join(frames))
 
         self.status_label.config(text=f"Audio saved: {audio_path}")
-        self.send_data(audio_path)
 
-    def send_data(self, data):
-        host = self.IP_entry.get()
-        port = int(self.port_entry.get())
+        # Convert audio file to bytes
+        with open(audio_path, 'rb') as audio_file:
+            audio_bytes = audio_file.read()
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            try:
-                client_socket.connect((host, port))
-                client_socket.sendall(data)
-                self.status_label.config(text="Data sent to server")
-            except Exception as e:
-                self.status_label.config(text=f"Error: {e}")
-            self.root.update()
+        # Send audio data to the server
+        self.send_data(b'AUDIO' + audio_bytes)
 
     def start_webcam(self):
         self.cap = cv2.VideoCapture(0)
@@ -174,6 +217,10 @@ class ClientGUI:
             self.root.update()
 
     def close_app(self):
+        if self.socket:
+            self.socket.close()
+        if hasattr(self, 'cap'):
+            self.cap.release()
         self.root.destroy()
 
 
