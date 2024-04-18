@@ -6,8 +6,6 @@ import wave
 import os
 from PIL import Image, ImageTk
 from datetime import datetime
-import io
-
 
 class ClientGUI:
     def __init__(self, root):
