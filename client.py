@@ -7,6 +7,7 @@ import os
 from PIL import Image, ImageTk
 from datetime import datetime
 
+
 class ClientGUI:
     def __init__(self, root):
         self.root = root
@@ -24,10 +25,15 @@ class ClientGUI:
         self.IP_entry = tk.Entry(self.root)
         self.IP_entry.pack()
 
-        self.port_label = tk.Label(self.root, text="Enter Server Port:")
-        self.port_label.pack()
-        self.port_entry = tk.Entry(self.root)
-        self.port_entry.pack()
+        self.photo_port_label = tk.Label(self.root, text="Enter Photo Port:")
+        self.photo_port_label.pack()
+        self.photo_port_entry = tk.Entry(self.root)
+        self.photo_port_entry.pack()
+
+        self.audio_port_label = tk.Label(self.root, text="Enter Audio Port:")
+        self.audio_port_label.pack()
+        self.audio_port_entry = tk.Entry(self.root)
+        self.audio_port_entry.pack()
 
         self.capture_button = tk.Button(
             self.root, text="Capture Image", command=self.capture_image, state=tk.DISABLED)
@@ -36,6 +42,14 @@ class ClientGUI:
         self.record_button = tk.Button(
             self.root, text="Record Audio", command=self.record_audio, state=tk.DISABLED)
         self.record_button.pack()
+        
+        self.receive_image = tk.Button(
+            self.root, text="Receive image", command=self.receive_image, state=tk.DISABLED)
+        self.receive_image.pack()
+
+        self.receive_voice = tk.Button(
+            self.root, text="Receive voice", command=self.receive_voice, state=tk.DISABLED)
+        self.receive_voice.pack()
 
         # Create a label to display the webcam feed
         self.webcam_label = tk.Label(self.root)
@@ -49,71 +63,78 @@ class ClientGUI:
             self.root, text="Close", command=self.close_app)
         self.close_button.pack()
 
-        self.socket = None
+        self.photo_socket = None
+        self.audio_socket = None
 
     def connect_to_server(self):
         try:
             host = self.IP_entry.get()
-            port = int(self.port_entry.get())
+            photo_port = int(self.photo_port_entry.get())
+            audio_port = int(self.audio_port_entry.get())
 
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect((host, port))
+            self.photo_socket = socket.socket(
+                socket.AF_INET, socket.SOCK_STREAM)
+            self.photo_socket.connect((host, photo_port))
+
+            self.audio_socket = socket.socket(
+                socket.AF_INET, socket.SOCK_STREAM)
+            self.audio_socket.connect((host, audio_port))
+
             self.status_label.config(text="Connected to server")
 
+            
             # Enable capture image and record audio buttons
             self.capture_button.config(state=tk.NORMAL)
             self.record_button.config(state=tk.NORMAL)
-            
-            while True:
-                try:
-                    data = self.socket.recv(1024)  # Adjust buffer size as needed
-                    if not data:
-                        break  # If no data received, break out of the loop
-                    self.process_data(data)
-                except Exception as e:
-                    print(f"Error receiving data from server: {str(e)}")
-                    break  # Break out of the loop on error
+            self.receive_image.config(state=tk.NORMAL)
+            self.receive_voice.config(state=tk.NORMAL)
+            self.root.update()
 
         except Exception as e:
             self.status_label.config(
                 text=f"Error connecting to server: {str(e)}")
 
-    def process_data(self, data):
-        if data.startswith(b'IMG'):
-            img_bytes = data[3:]
-            self.receive_image(img_bytes)
-        elif data.startswith(b'AUDIO'):
-            audio_bytes = data[5:]
-            self.receive_audio(audio_bytes)
-        else:
-            self.status_label.config(text="Invalid data received")
+    def receive_image(self):
 
-    def receive_image(self, img_bytes):
-        # save the recidved image to a folder with timestamp
-        folder_path = "received_images_client"
-        os.makedirs(folder_path, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        image_path = os.path.join(
-            folder_path, f"received_image_{timestamp}.jpg")
-        with open(image_path, 'wb') as img_file:
-            img_file.write(img_bytes)
-        self.status_label.config(text=f"Image saved: {image_path}")
+        timenow = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    def receive_audio(self, audio_bytes):
-        # save the recived audio to a folder with timestamp
-        folder_path = "received_audio_client"
-        os.makedirs(folder_path, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        audio_path = os.path.join(
-            folder_path, f"received_audio_{timestamp}.wav")
-        with open(audio_path, 'wb') as audio_file:
-            audio_file.write(audio_bytes)
-        self.status_label.config(text=f"Audio saved: {audio_path}")
+        # Receiving image data
+        img_data = self.photo_socket.recv(100000)
+        if img_data.startswith(b'IMG'):
+            with open(f"received_image_server_{timenow}.jpg", 'wb') as img_file:
+                img_file.write(img_data[3:])
+            self.photo_status_label.config(
+                text=f"Image received: received_image_server_{timenow}.jpg")
+            
 
-    def send_data(self, data):
+    def receive_voice(self):
+    
+        timenow = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Receiving audio data
+        audio_data = self.audio_socket.recv(3000000)
+        # Ensure that the received data starts with "AUDIO"
+
+        if audio_data.startswith(b'AUDIO'):
+            with open(f"received_audio_server_{timenow}.wav", 'wb') as audio_file:
+                audio_file.write(audio_data[5:])
+            self.audio_status_label.config(
+                text=f"Audio received: received_audio_server_{timenow}.wav")
+            
+
+    def send_data(self, socket, data):
         try:
-            if self.socket:
-                self.socket.sendall(data)
+            if socket:
+                socket.sendall(data)
+            else:
+                self.photo_status_label.config(text="Not connected to client")
+                self.audio_status_label.config(text="Not connected to client")
+        except Exception as e:
+            print(f"Error sending data to client: {str(e)}")
+
+    def send_data(self, socket, data):
+        try:
+            if socket:
+                socket.sendall(data)
             else:
                 self.status_label.config(text="Not connected to server")
         except Exception as e:
@@ -146,7 +167,7 @@ class ClientGUI:
                     img_bytes = img_file.read()
 
                 # Send image data to the server
-                self.send_data(b'IMG' + img_bytes)
+                self.send_data(self.photo_socket, b'IMG' + img_bytes)
         else:
             self.status_label.config(text="Webcam not available")
 
@@ -155,7 +176,7 @@ class ClientGUI:
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 44100
-        RECORD_SECONDS = 5
+        RECORD_SECONDS = 30
         p = pyaudio.PyAudio()
 
         stream = p.open(format=FORMAT,
@@ -197,7 +218,7 @@ class ClientGUI:
             audio_bytes = audio_file.read()
 
         # Send audio data to the server
-        self.send_data(b'AUDIO' + audio_bytes)
+        self.send_data(self.audio_socket, b'AUDIO' + audio_bytes)
 
     def start_webcam(self):
         self.cap = cv2.VideoCapture(0)
@@ -215,8 +236,10 @@ class ClientGUI:
             self.root.update()
 
     def close_app(self):
-        if self.socket:
-            self.socket.close()
+        if self.photo_socket:
+            self.photo_socket.close()
+        if self.audio_socket:
+            self.audio_socket.close()
         if hasattr(self, 'cap'):
             self.cap.release()
         self.root.destroy()
